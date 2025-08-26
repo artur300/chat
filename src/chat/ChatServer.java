@@ -282,18 +282,32 @@ public class ChatServer {
         room.system(us.name() + " left the chat.");
         room.remove(us);
 
-        // אם אחרי העזיבה החדר ריק -> סוגרים
-        if (room.isEmpty()) {
+        // אם נשארו פחות משני משתתפים -> סוגרים את החדר לגמרי
+        if (room.participantsCount() < 2) {
+            for (UserSession other : room.participantsList()) {
+                other.setActiveRoomId(null);
+                other.setBusy(false);
+                other.out().println(sys("Chat " + rid + " closed."));
+                notifyPending(other.name()); // אם חיכו לו בתור
+            }
+            for (UserSession sup : room.supervisorsList()) {
+                sup.setActiveRoomId(null);
+                sup.setBusy(false);
+                sup.out().println(sys("Chat " + rid + " closed."));
+            }
             rooms.remove(rid);
+            broadcastPresence();
+            return;
         }
+
+        // אחרת: החדר עדיין עם 2+ משתתפים — רק היוצא משתחרר
         us.setActiveRoomId(null);
         us.setBusy(false);
         us.out().println(sys("Left chat " + rid + "."));
         broadcastPresence();
-
-        // כשהמשתמש התפנה – ליידע מבקשים ממתינים
         notifyPending(us.name());
     }
+
 
     private static void listRooms(UserSession us) {
         if (rooms.isEmpty()) { us.out().println(sys("No active rooms.")); return; }

@@ -91,6 +91,18 @@ public class ChatRoom {
         for (UserSession u : participants) u.out().println(line);
         for (UserSession s : supervisors) s.out().println(line);
     }
+
+
+    public int participantsCount() {
+        return participants.size();
+    }
+    public List<UserSession> participantsList() {
+        return new ArrayList<>(participants);
+    }
+    public List<UserSession> supervisorsList() {
+        return new ArrayList<>(supervisors);
+    }
+
 }
 
 
