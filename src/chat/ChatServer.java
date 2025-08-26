@@ -216,9 +216,14 @@ public class ChatServer {
             us.setName(name);
             sessionsByName.put(name, us);
             us.out().println(sys("Welcome, " + name + "!"));
+
+            // >>> חדש: אם חיכו לך בתור כשהיית אוף־ליין – ננסה לפתוח עכשיו
+            notifyPending(name);
+
             break;
         }
     }
+
 
     private static void sendPresenceListTo(UserSession us) {
         List<String> names = new ArrayList<>();
@@ -243,15 +248,29 @@ public class ChatServer {
             caller.out().println(sys(ChatColors.RED+"✖ You cannot chat with yourself."+ChatColors.RESET));
             return;
         }
-        UserSession target = sessionsByName.get(targetName);
-        if (target == null) {
-            caller.out().println(sys(ChatColors.RED+"✖ " + targetName + " is offline. Added to their pending queue."+ChatColors.RESET));
-            pendingByTarget.computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>()).offer(caller.name());
+
+        // 1) אם השם לא מוכר בכלל – לא יוצרים pending, מחזירים הודעת שגיאה ברורה
+        if (!ALLOWED.contains(targetName)) {
+            caller.out().println(sys(ChatColors.RED+"✖ No such user: " + targetName + ChatColors.RESET));
             return;
         }
+
+        UserSession target = sessionsByName.get(targetName);
+
+        // 2) אם לא מחובר – רק עכשיו (כי הוא מוכר) נוסיף לתור
+        if (target == null) {
+            caller.out().println(sys(ChatColors.RED+"✖ " + targetName + " is offline. Added to their pending queue."+ChatColors.RESET));
+            pendingByTarget
+                    .computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>())
+                    .offer(caller.name());
+            return;
+        }
+
         if (target.isBusy() || target.activeRoomId()!=null) {
             caller.out().println(sys(targetName + " is busy. Added to their pending queue."));
-            pendingByTarget.computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>()).offer(caller.name());
+            pendingByTarget
+                    .computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>())
+                    .offer(caller.name());
             return;
         }
 
@@ -266,12 +285,14 @@ public class ChatServer {
         broadcastPresence();
     }
 
+
     private static void leaveChat(UserSession us) {
         String rid = us.activeRoomId();
         if (rid == null) { us.out().println(sys("No active chat.")); return; }
 
         ChatRoom room = rooms.get(rid);
         if (room == null) {
+            // חדר כבר לא קיים – נקה את הסשן
             us.setActiveRoomId(null);
             us.setBusy(false);
             us.out().println(sys("Chat ended."));
@@ -282,31 +303,43 @@ public class ChatServer {
         room.system(us.name() + " left the chat.");
         room.remove(us);
 
-        // אם נשארו פחות משני משתתפים -> סוגרים את החדר לגמרי
+        // --- אם נשארו פחות משני משתתפים -> סוגרים את החדר לגמרי ---
         if (room.participantsCount() < 2) {
+
+            // (א) מאפסים את מי שנשאר בחדר
             for (UserSession other : room.participantsList()) {
                 other.setActiveRoomId(null);
                 other.setBusy(false);
                 other.out().println(sys("Chat " + rid + " closed."));
-                notifyPending(other.name()); // אם חיכו לו בתור
+                notifyPending(other.name());
             }
+
+            // (ב) מאפסים מנהלים (אם היו)
             for (UserSession sup : room.supervisorsList()) {
                 sup.setActiveRoomId(null);
                 sup.setBusy(false);
                 sup.out().println(sys("Chat " + rid + " closed."));
             }
+
+            // ⚠️ (ג) ***מאפסים גם את היוצא עצמו*** — זה מה שהיה חסר!
+            us.setActiveRoomId(null);
+            us.setBusy(false);
+            us.out().println(sys("Chat " + rid + " closed."));
+
             rooms.remove(rid);
             broadcastPresence();
             return;
         }
 
-        // אחרת: החדר עדיין עם 2+ משתתפים — רק היוצא משתחרר
+        // אחרת: עדיין יש 2+ משתתפים — רק היוצא משתחרר
         us.setActiveRoomId(null);
         us.setBusy(false);
         us.out().println(sys("Left chat " + rid + "."));
         broadcastPresence();
         notifyPending(us.name());
     }
+
+
 
 
     private static void listRooms(UserSession us) {
@@ -392,19 +425,40 @@ public class ChatServer {
                 sessionsByName.remove(name);
             }
             allSessions.remove(us);
-            // יציאה מצ'אט אם קיים
+
             if (us.activeRoomId() != null) {
                 ChatRoom r = rooms.get(us.activeRoomId());
                 if (r != null) {
-                    r.system(name + " disconnected.");
+                    r.system((name != null ? name : us.addr()) + " disconnected.");
                     r.remove(us);
-                    if (r.isEmpty()) rooms.remove(r.id());
+
+                    if (r.participantsCount() < 2) {
+                        // סוגרים את החדר ומאפסים את מי שנשאר + מנהלים
+                        for (UserSession other : r.participantsList()) {
+                            other.setActiveRoomId(null);
+                            other.setBusy(false);
+                            other.out().println(sys("Chat " + r.id() + " closed."));
+                            notifyPending(other.name());
+                        }
+                        for (UserSession sup : r.supervisorsList()) {
+                            sup.setActiveRoomId(null);
+                            sup.setBusy(false);
+                            sup.out().println(sys("Chat " + r.id() + " closed."));
+                        }
+                        rooms.remove(r.id());
+                    }
                 }
             }
+
+            // מאפסים את היוצא בכל מקרה
+            us.setActiveRoomId(null);
+            us.setBusy(false);
+
             broadcastSys((name != null ? name : us.addr()) + " left.");
             broadcastPresence();
         } catch (Exception ignored) {}
     }
+
 
     // --- Utilities ---
     private static void broadcastSys(String text) {
