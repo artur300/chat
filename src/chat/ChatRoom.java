@@ -69,8 +69,6 @@ public class ChatRoom {
 
     public void addSupervisor(UserSession sup) {
         supervisors.add(sup);
-        // מודיעים גם למשתתפים — באדום
-        system(ChatColors.GREEN + "Supervisor " + sup.name() + " joined." + ChatColors.RESET);
     }
 
     public void remove(UserSession u) {

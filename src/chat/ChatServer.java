@@ -178,7 +178,9 @@ public class ChatServer {
                     us.out().println(sys("Usage: /join <CHAT_ID>"));
                     break;
                 }
-                joinAsSupervisor(us, arg);
+                String roomKey = arg.trim().toLowerCase();
+                roomKey = roomKey.replaceAll("\\s+", " ");
+                joinAsSupervisor(us, roomKey);
                 break;
             }
 
