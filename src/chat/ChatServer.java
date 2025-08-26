@@ -244,37 +244,31 @@ public class ChatServer {
     }
 
     private static void startChat(UserSession caller, String targetName) {
+        if (caller.activeRoomId() != null) {
+            caller.out().println(sys("✖ You are already in " + caller.activeRoomId() + ". Use /leave first."));
+            return;
+        }
         if (caller.name().equals(targetName)) {
             caller.out().println(sys(ChatColors.RED+"✖ You cannot chat with yourself."+ChatColors.RESET));
             return;
         }
-
-        // 1) אם השם לא מוכר בכלל – לא יוצרים pending, מחזירים הודעת שגיאה ברורה
         if (!ALLOWED.contains(targetName)) {
             caller.out().println(sys(ChatColors.RED+"✖ No such user: " + targetName + ChatColors.RESET));
             return;
         }
 
         UserSession target = sessionsByName.get(targetName);
-
-        // 2) אם לא מחובר – רק עכשיו (כי הוא מוכר) נוסיף לתור
         if (target == null) {
             caller.out().println(sys(ChatColors.RED+"✖ " + targetName + " is offline. Added to their pending queue."+ChatColors.RESET));
-            pendingByTarget
-                    .computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>())
-                    .offer(caller.name());
+            pendingByTarget.computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>()).offer(caller.name());
             return;
         }
-
         if (target.isBusy() || target.activeRoomId()!=null) {
             caller.out().println(sys(targetName + " is busy. Added to their pending queue."));
-            pendingByTarget
-                    .computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>())
-                    .offer(caller.name());
+            pendingByTarget.computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>()).offer(caller.name());
             return;
         }
 
-        // פותחים צ'אט
         ChatRoom room = ChatRoom.create(caller, target);
         rooms.put(room.id(), room);
         caller.setActiveRoomId(room.id());
@@ -292,7 +286,6 @@ public class ChatServer {
 
         ChatRoom room = rooms.get(rid);
         if (room == null) {
-            // חדר כבר לא קיים – נקה את הסשן
             us.setActiveRoomId(null);
             us.setBusy(false);
             us.out().println(sys("Chat ended."));
@@ -303,35 +296,35 @@ public class ChatServer {
         room.system(us.name() + " left the chat.");
         room.remove(us);
 
-        // --- אם נשארו פחות משני משתתפים -> סוגרים את החדר לגמרי ---
+        // אם נשארו פחות משני משתתפים -> סוגרים את החדר לגמרי
         if (room.participantsCount() < 2) {
-
-            // (א) מאפסים את מי שנשאר בחדר
+            // 1) מי שנשאר בחדר
             for (UserSession other : room.participantsList()) {
                 other.setActiveRoomId(null);
                 other.setBusy(false);
                 other.out().println(sys("Chat " + rid + " closed."));
-                notifyPending(other.name());
+                notifyPending(other.name());             // << היה קיים
             }
-
-            // (ב) מאפסים מנהלים (אם היו)
+            // 2) מנהלים (אם היו)
             for (UserSession sup : room.supervisorsList()) {
                 sup.setActiveRoomId(null);
                 sup.setBusy(false);
                 sup.out().println(sys("Chat " + rid + " closed."));
+                // בדרך כלל אין תור למנהל, לכן לא קוראים כאן ל-notifyPending
             }
 
-            // ⚠️ (ג) ***מאפסים גם את היוצא עצמו*** — זה מה שהיה חסר!
+            // 3) ***גם היוצא עצמו***  <<<< הוספה חשובה
             us.setActiveRoomId(null);
             us.setBusy(false);
             us.out().println(sys("Chat " + rid + " closed."));
+            notifyPending(us.name());                    // <<<< זה היה חסר
 
             rooms.remove(rid);
             broadcastPresence();
             return;
         }
 
-        // אחרת: עדיין יש 2+ משתתפים — רק היוצא משתחרר
+        // עדיין 2+ משתתפים – רק היוצא משתחרר
         us.setActiveRoomId(null);
         us.setBusy(false);
         us.out().println(sys("Left chat " + rid + "."));
@@ -353,9 +346,12 @@ public class ChatServer {
 
     // מנהל משמרת מצטרף
     private static void joinAsSupervisor(UserSession sup, String roomId) {
-        // דוגמה פשוטה: דורשים שם משתמש "ADMIN" כדי להצטרף
         if (!"ADMIN".equals(sup.name())) {
             sup.out().println(sys(ChatColors.RED+"✖ Only ADMIN can join rooms."+ChatColors.RESET));
+            return;
+        }
+        if (sup.activeRoomId() != null) {
+            sup.out().println(sys("✖ You are already in " + sup.activeRoomId() + ". Use /leave first."));
             return;
         }
         ChatRoom r = rooms.get(roomId);
@@ -364,9 +360,10 @@ public class ChatServer {
         r.addSupervisor(sup);
         sup.setActiveRoomId(r.id());
         sup.setBusy(true);
-        r.system("Supervisor " + sup.name() + " joined room " + r.id());
+        r.system("Supervisor " + sup.name() + " joined " + r.id());
         broadcastPresence();
     }
+
 
     private static void notifyPending(String freedUser) {
         Queue<String> q = pendingByTarget.get(freedUser);
