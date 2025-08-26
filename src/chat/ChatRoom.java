@@ -61,8 +61,8 @@ public class ChatRoom {
 
         // למנהלי משמרת — מוצג כמו אצל מקבל (אפשר לשנות כרצונך)
         for (UserSession sup : supervisors) {
-            String namePart = RECV_NAME_COLOR + from.name() + ChatColors.RESET;
-            String msgPart  = RECV_MSG_COLOR  + msg        + ChatColors.RESET;
+            String namePart = ChatColors.BLUE + from.name() + ChatColors.RESET;
+            String msgPart  = ChatColors.BLUE  + msg        + ChatColors.RESET;
             sup.out().println(ts + namePart + ": " + msgPart);
         }
     }
@@ -70,7 +70,7 @@ public class ChatRoom {
     public void addSupervisor(UserSession sup) {
         supervisors.add(sup);
         // מודיעים גם למשתתפים — באדום
-        system(ChatColors.RED + "Supervisor " + sup.name() + " joined." + ChatColors.RESET);
+        system(ChatColors.GREEN + "Supervisor " + sup.name() + " joined." + ChatColors.RESET);
     }
 
     public void remove(UserSession u) {

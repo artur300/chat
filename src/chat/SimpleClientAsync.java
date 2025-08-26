@@ -32,7 +32,7 @@ public class SimpleClientAsync {
                 toSrv.println(args[0].trim());
             }
 
-            System.out.println("Type /help");
+            System.out.println(ChatColors.YELLOW+"----- Type: /menu -----"+ChatColors.RESET);
             String line;
             while ((line = fromUser.readLine()) != null) {
                 toSrv.println(line);

@@ -11,7 +11,7 @@ public class ChatServer {
 
     // --- תצורה ---
     private static final int PORT = 7000;
-    private static final List<String> ALLOWED = Arrays.asList("BOB","JACK","ALICE","EVA","MIKE","SHIFT_LEAD"); // לדוגמה
+    private static final List<String> ALLOWED = Arrays.asList("BOB","JACK","ALICE","EVA","MIKE","ADMIN"); // לדוגמה
     private static final SimpleDateFormat TS = new SimpleDateFormat("HH:mm");
 
     // --- מצב מערכת ---
@@ -45,7 +45,7 @@ public class ChatServer {
             negotiateName(us);
 
             // שידור מערכת
-            broadcastSys(us.name()+" joined. Type /help for commands.");
+            broadcastSys(us.name()+" joined. Type /menu for commands.");
             sendPresenceListTo(us);
 
             // לולאת הודעות
@@ -87,7 +87,7 @@ public class ChatServer {
 
     // ---- פקודות ----
     private static void handleCommand(UserSession us, String cmdLine) {
-        // cmdLine מגיע בצורת "/help" או "/chat ALICE" וכו'
+        // cmdLine מגיע בצורת "/menu" או "/chat ALICE" וכו'
 
         // מסירים הסלאש הראשון כדי שה-switch יעבוד על שמות בלי "/"
         if (cmdLine.startsWith("/")) {
@@ -105,10 +105,10 @@ public class ChatServer {
         }
 
         switch (cmd) {
-            case "help": {
+            case "menu": {
                 us.out().println(sys(
-                        "Available commands:\n" +
-                                "  /help            - Show this help message\n" +
+                        ChatColors.YELLOW+"Available commands:\n" +
+                                "  /menu            - Show this menu message\n" +
                                 "  /list            - Show who is online\n" +
                                 "  /whoami          - Show your name and status\n" +
                                 "  /busy            - Mark yourself as busy\n" +
@@ -116,8 +116,8 @@ public class ChatServer {
                                 "  /chat <USER>     - Start chat with a user\n" +
                                 "  /leave           - Leave the current chat\n" +
                                 "  /rooms           - List all active chat rooms\n" +
-                                "  /join <CHAT_ID>  - Join a room as supervisor\n" +
-                                "  /quit            - Disconnect from server"
+                                "  /join <ROOM>     - Join a room as supervisor\n" +
+                                "  /quit            - Disconnect from server"+ChatColors.RESET
                 ));
                 break;
             }
@@ -188,7 +188,7 @@ public class ChatServer {
             }
 
             default: {
-                us.out().println(sys("Unknown command. Type /help to see available commands."));
+                us.out().println(sys("Unknown command. Type /menu to see available commands."));
                 break;
             }
         }
@@ -204,11 +204,11 @@ public class ChatServer {
             name = name.trim().toUpperCase();
 
             if (!ALLOWED.contains(name)) {
-                us.out().println(sys("✖ Not allowed. Choose from: " + ALLOWED));
+                us.out().println(sys(ChatColors.RED+"✖ Not allowed. Choose from: " + ALLOWED+ChatColors.RESET));
                 continue;
             }
             if (sessionsByName.containsKey(name)) {
-                us.out().println(sys("✖ Already logged in elsewhere."));
+                us.out().println(sys(ChatColors.RED+"✖ Already logged in elsewhere."+ChatColors.RESET));
                 continue;
             }
             us.setName(name);
@@ -238,12 +238,12 @@ public class ChatServer {
 
     private static void startChat(UserSession caller, String targetName) {
         if (caller.name().equals(targetName)) {
-            caller.out().println(sys("✖ You cannot chat with yourself."));
+            caller.out().println(sys(ChatColors.RED+"✖ You cannot chat with yourself."+ChatColors.RESET));
             return;
         }
         UserSession target = sessionsByName.get(targetName);
         if (target == null) {
-            caller.out().println(sys("✖ " + targetName + " is offline. Added to their pending queue."));
+            caller.out().println(sys(ChatColors.RED+"✖ " + targetName + " is offline. Added to their pending queue."+ChatColors.RESET));
             pendingByTarget.computeIfAbsent(targetName, k -> new ConcurrentLinkedQueue<>()).offer(caller.name());
             return;
         }
@@ -304,13 +304,13 @@ public class ChatServer {
 
     // מנהל משמרת מצטרף
     private static void joinAsSupervisor(UserSession sup, String roomId) {
-        // דוגמה פשוטה: דורשים שם משתמש "SHIFT_LEAD" כדי להצטרף
-        if (!"SHIFT_LEAD".equals(sup.name())) {
-            sup.out().println(sys("✖ Only SHIFT_LEAD can join rooms."));
+        // דוגמה פשוטה: דורשים שם משתמש "ADMIN" כדי להצטרף
+        if (!"ADMIN".equals(sup.name())) {
+            sup.out().println(sys(ChatColors.RED+"✖ Only ADMIN can join rooms."+ChatColors.RESET));
             return;
         }
         ChatRoom r = rooms.get(roomId);
-        if (r == null) { sup.out().println(sys("✖ No such room.")); return; }
+        if (r == null) { sup.out().println(sys(ChatColors.RED+"✖ No such room."+ChatColors.RESET)); return; }
 
         r.addSupervisor(sup);
         sup.setActiveRoomId(r.id());
