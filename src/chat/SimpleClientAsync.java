@@ -5,6 +5,14 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
 
+// The SimpleClientAsync class is the chat client program.
+// - Connects to the server on port 7000 using a socket.
+// - Opens input/output streams to communicate with the server and the user’s console.
+// - Starts a background thread that constantly reads and prints messages from the server.
+// - Lets the user type messages or commands, which are sent to the server.
+// - The client closes when the user types "/quit" or "goodbye".
+// In short, this is the program the user runs to join and chat with the server.
+
 public class SimpleClientAsync {
 
     public static void main(String[] args) {
@@ -15,7 +23,6 @@ public class SimpleClientAsync {
 
             System.out.println("Connected to " + s.getRemoteSocketAddress());
 
-            // Thread לקריאת הודעות מהשרת
             Thread reader = new Thread(() -> {
                 try {
                     String srvMsg;
@@ -26,11 +33,6 @@ public class SimpleClientAsync {
             });
             reader.setDaemon(true);
             reader.start();
-
-            // אם שולחים שם כארגומנט, נכניס אותו ישר
-            if (args.length > 0 && args[0] != null && !args[0].isBlank()) {
-                toSrv.println(args[0].trim());
-            }
 
             System.out.println(ChatColors.YELLOW+"----- Type: /menu -----"+ChatColors.RESET);
             String line;
