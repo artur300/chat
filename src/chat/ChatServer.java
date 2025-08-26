@@ -87,45 +87,113 @@ public class ChatServer {
 
     // ---- פקודות ----
     private static void handleCommand(UserSession us, String cmdLine) {
+        // cmdLine מגיע בצורת "/help" או "/chat ALICE" וכו'
+
+        // מסירים הסלאש הראשון כדי שה-switch יעבוד על שמות בלי "/"
+        if (cmdLine.startsWith("/")) {
+            cmdLine = cmdLine.substring(1);
+        }
+
+        // פירוק לפקודה + ארגומנט (אם יש)
         String[] parts = cmdLine.split("\\s+", 2);
+
         String cmd = parts[0].toLowerCase();
-        String arg = (parts.length > 1) ? parts[1].trim() : "";
+
+        String arg = "";
+        if (parts.length > 1) {
+            arg = parts[1].trim();
+        }
 
         switch (cmd) {
-            case "/help":
-                us.out().println(sys("Commands: /list, /chat <USER>, /leave, /busy, /free, /whoami, /rooms, /join <CHAT_ID>, /quit"));
+            case "help": {
+                us.out().println(sys(
+                        "Available commands:\n" +
+                                "  /help            - Show this help message\n" +
+                                "  /list            - Show who is online\n" +
+                                "  /whoami          - Show your name and status\n" +
+                                "  /busy            - Mark yourself as busy\n" +
+                                "  /free            - Mark yourself as free\n" +
+                                "  /chat <USER>     - Start chat with a user\n" +
+                                "  /leave           - Leave the current chat\n" +
+                                "  /rooms           - List all active chat rooms\n" +
+                                "  /join <CHAT_ID>  - Join a room as supervisor\n" +
+                                "  /quit            - Disconnect from server"
+                ));
                 break;
-            case "/list":
+            }
+
+            case "list": {
                 sendPresenceListTo(us);
                 break;
-            case "/whoami":
-                us.out().println(sys("You are " + us.name() + " | status: " + (us.isBusy()?"BUSY":"FREE") +
-                        (us.activeRoomId()!=null?(" | in chat "+us.activeRoomId()):"")));
+            }
+
+            case "whoami": {
+                String status;
+                if (us.isBusy()) {
+                    status = "BUSY";
+                } else {
+                    status = "FREE";
+                }
+
+                String inChat = "";
+                if (us.activeRoomId() != null) {
+                    inChat = " | in chat " + us.activeRoomId();
+                }
+
+                us.out().println(sys("You are " + us.name() + " | status: " + status + inChat));
                 break;
-            case "/busy":
+            }
+
+            case "busy": {
                 setBusy(us, true);
                 break;
-            case "/free":
+            }
+
+            case "free": {
                 setBusy(us, false);
                 break;
-            case "/chat":
-                if (arg.isEmpty()) { us.out().println(sys("Usage: /chat <USER>")); break; }
+            }
+
+            case "chat": {
+                if (arg.isEmpty()) {
+                    us.out().println(sys("Usage: /chat <USER>"));
+                    break;
+                }
                 startChat(us, arg.toUpperCase());
                 break;
-            case "/leave":
+            }
+
+            case "leave": {
                 leaveChat(us);
                 break;
-            case "/rooms":
+            }
+
+            case "rooms": {
                 listRooms(us);
                 break;
-            case "/join":
-                if (arg.isEmpty()) { us.out().println(sys("Usage: /join <CHAT_ID>")); break; }
+            }
+
+            case "join": {
+                if (arg.isEmpty()) {
+                    us.out().println(sys("Usage: /join <CHAT_ID>"));
+                    break;
+                }
                 joinAsSupervisor(us, arg);
                 break;
-            default:
-                us.out().println(sys("Unknown command. /help"));
+            }
+
+            case "quit": {
+                us.out().println(sys("Goodbye!"));
+                break;
+            }
+
+            default: {
+                us.out().println(sys("Unknown command. Type /help to see available commands."));
+                break;
+            }
         }
     }
+
 
     // ---- לוגיקה ----
     private static void negotiateName(UserSession us) throws IOException {

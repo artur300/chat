@@ -3,9 +3,18 @@ package chat;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.atomic.AtomicInteger;
+
 
 public class ChatRoom {
     private static final SimpleDateFormat TS = new SimpleDateFormat("HH:mm");
+
+    // צבעים קבועים — נוח לשחק בהם במקום אחד
+    private static final String SENDER_NAME_COLOR = ChatColors.PURPLE;
+    private static final String SENDER_MSG_COLOR  = ChatColors.PURPLE;
+    private static final String RECV_NAME_COLOR   = ChatColors.WHITE;
+    private static final String RECV_MSG_COLOR    = ChatColors.CYAN;
+    private static final String SYSTEM_COLOR      = ChatColors.CYAN;
 
     private final String id;
     private final Set<UserSession> participants = new CopyOnWriteArraySet<>();
@@ -13,8 +22,11 @@ public class ChatRoom {
 
     private ChatRoom(String id) { this.id = id; }
 
+
+    private static final AtomicInteger SEQ = new AtomicInteger(1);
+
     public static ChatRoom create(UserSession a, UserSession b) {
-        String id = "R" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        String id = "room " + SEQ.getAndIncrement();
         ChatRoom r = new ChatRoom(id);
         r.participants.add(a);
         r.participants.add(b);
@@ -23,20 +35,42 @@ public class ChatRoom {
 
     public String id() { return id; }
 
+    // הודעות מערכת בצבע קבוע (כחול-טורקיז)
     public void system(String text) {
-        String line = "["+TS.format(new Date())+"] * " + text;
+        String line = "[" + TS.format(new Date()) + "] "
+                + SYSTEM_COLOR + "* " + text + ChatColors.RESET;
         sendToAll(line);
     }
 
+    // צביעה שונה לשולח/מקבל: בניית שורה מותאמת לכל נמען
     public void say(UserSession from, String msg) {
-        String line = "["+TS.format(new Date())+"] " + from.name() + ": " + msg;
-        sendToAll(line);
+        String ts = "[" + TS.format(new Date()) + "] ";
+
+        // למשתתפים
+        for (UserSession u : participants) {
+            boolean isSenderView = (u == from);
+
+            String namePart = (isSenderView ? SENDER_NAME_COLOR : RECV_NAME_COLOR)
+                    + from.name() + ChatColors.RESET;
+
+            String msgPart  = (isSenderView ? SENDER_MSG_COLOR  : RECV_MSG_COLOR)
+                    + msg + ChatColors.RESET;
+
+            u.out().println(ts + namePart + ": " + msgPart);
+        }
+
+        // למנהלי משמרת — מוצג כמו אצל מקבל (אפשר לשנות כרצונך)
+        for (UserSession sup : supervisors) {
+            String namePart = RECV_NAME_COLOR + from.name() + ChatColors.RESET;
+            String msgPart  = RECV_MSG_COLOR  + msg        + ChatColors.RESET;
+            sup.out().println(ts + namePart + ": " + msgPart);
+        }
     }
 
     public void addSupervisor(UserSession sup) {
         supervisors.add(sup);
-        // מודיעים גם למשתתפים
-        system("Supervisor " + sup.name() + " joined.");
+        // מודיעים גם למשתתפים — באדום
+        system(ChatColors.RED + "Supervisor " + sup.name() + " joined." + ChatColors.RESET);
     }
 
     public void remove(UserSession u) {
@@ -51,7 +85,7 @@ public class ChatRoom {
     public String participantsSummary() {
         List<String> p = new ArrayList<>();
         for (UserSession u : participants) p.add(u.name());
-        for (UserSession s : supervisors) p.add("SUP:"+s.name());
+        for (UserSession s : supervisors) p.add("SUP:" + s.name());
         return String.join(", ", p);
     }
 
@@ -60,4 +94,5 @@ public class ChatRoom {
         for (UserSession s : supervisors) s.out().println(line);
     }
 }
+
 
